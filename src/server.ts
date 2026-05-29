@@ -1,6 +1,9 @@
+// Import the side-effect module explicitly and also reference its named export
+// so bundlers that rely on static analysis will not drop it.
 import "./lib/error-capture";
-
-import { consumeLastCapturedError } from "./lib/error-capture";
+import { __error_capture_marker, consumeLastCapturedError } from "./lib/error-capture";
+// reference to avoid unused-import pruning in some toolchains
+void __error_capture_marker;
 import { renderErrorPage } from "./lib/error-page";
 
 type ServerEntry = {
