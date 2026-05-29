@@ -7,9 +7,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "tsr generate && vite build",
     "build:dev": "vite build --mode development",
+    "generate": "tsr generate",
     "preview": "vite preview",
+    "deploy": "bun run build && npx wrangler deploy",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -11,6 +11,15 @@ export default defineConfig({
     tanstackStart({ server: { entry: "server" } }),
     react(),
     tailwindcss(),
-    tsconfigPaths(),
+    tsconfigPaths({ ignoreConfigErrors: true }),
   ],
+  resolve: {
+    alias: {
+      "#tanstack-router-entry": "/.tanstack/router/entry.js",
+      "#tanstack-start-entry": "/.tanstack/start/entry.js",
+      "#tanstack-start-plugin-adapters": "/.tanstack/start/plugin-adapters.js",
+      "tanstack-start-manifest:v": "/.tanstack/start/manifest.js",
+      "tanstack-start-injected-head-scripts:v": "/.tanstack/start/injected-head-scripts.js",
+    },
+  },
 });
