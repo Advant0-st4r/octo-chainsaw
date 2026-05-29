@@ -1,0 +1,146 @@
+{
+  "name": "cognitime_verified_gaps",
+  "repo": "local-echo-main",
+  "verified_against": "local-echo-main.zip (HEAD commit 9565e87)",
+  "last_migration": "supabase/migrations/20260527090000_duration_floor.sql",
+  "verification_method": "direct file inspection of all .ts and .sql files in archive",
+  "fully_resolved": {
+    "ids": ["P0-G1", "P0-G4", "P1-G7", "P1-G8"],
+    "note": "P0-G1 and P0-G4 resolved pre-repo. P1-G7 (Zod .refine() temporal validation) and P1-G8 (callOpenAIWithRetry with exponential backoff) confirmed present in src/lib/architect.functions.ts and src/lib/ledger.functions.ts."
+  },
+  "remaining_gaps": [
+    {
+      "id": "P0-G2",
+      "priority": "P0",
+      "title": "Rate limit race condition — auth and guest paths",
+      "status": "PARTIALLY_RESOLVED",
+      "verified_evidence": {
+        "file": "src/lib/architect.functions.ts",
+        "checkRateLimit": "Two-step select→upsert with explicit TODO comment: 'replace with an atomic RPC in Postgres to avoid a small read-modify-write race'",
+        "enforceGuestRateLimit": "Two-step maybeSingle()→upsert. Same race window present."
+      },
+      "what_is_missing": {
+        "migrations_not_applied": [
+          "increment_rate_limit(p_user_id, p_window, p_kind, p_limit) Postgres function — exists only as spec in gaps/refact-1/cognitime_remaining_gaps_1.json, NOT in any .sql migration file",
+          "increment_guest_rate_limit(p_ip_hash, p_window, p_limit) — same: spec only, not applied"
+        ],
+        "code_not_changed": [
+          "src/lib/architect.functions.ts :: checkRateLimit — still uses upsert, RPC call not wired",
+          "src/lib/architect.functions.ts :: enforceGuestRateLimit — still uses upsert, RPC call not wired"
+        ]
+      }
+    },
+    {
+      "id": "P0-G3",
+      "priority": "P0",
+      "title": "Server-side observability — OpenAI latency and embed failures",
+      "status": "PARTIALLY_RESOLVED",
+      "verified_evidence": {
+        "file": "src/lib/architect.functions.ts",
+        "done": [
+          "AbortController + 25s timeout in callOpenAI (confirmed)",
+          "AbortController + 10s timeout in embed (confirmed)",
+          "structuredLog utility present and used (confirmed)",
+          "callOpenAIWithRetry logs attempt + duration_ms on success and failure (confirmed)",
+          "createMap logs createMap.start with requestId (confirmed)",
+          "generateGuestMap logs generateGuestMap.start with requestId (confirmed)"
+        ]
+      },
+      "what_is_missing": [
+        "createMap: const start = Date.now() is set but no structuredLog at completion — total handler wall time never logged",
+        "generateGuestMap: const start = Date.now() is set but never used in any structuredLog call — same omission",
+        "embed failures caught with console.warn only; not routed through structuredLog"
+      ]
+    },
+    {
+      "id": "P1-G5",
+      "priority": "P1",
+      "title": "Execution maps are immutable — no edit, reschedule, or delete",
+      "status": "UNRESOLVED",
+      "verified_evidence": {
+        "execution_maps_schema": "No archived_at or updated_at column in any migration (confirmed across all 9 .sql files)",
+        "server_functions": "No updatePhase, archiveMap, or deleteMap function anywhere in src/ (confirmed by grep)",
+        "ui": "No edit or archive controls in any route or component file"
+      },
+      "what_is_missing": {
+        "migrations": [
+          "ALTER TABLE execution_maps ADD COLUMN archived_at timestamptz",
+          "ALTER TABLE execution_maps ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now()",
+          "Trigger: touch updated_at on execution_maps UPDATE"
+        ],
+        "server_rpcs": ["updatePhase", "archiveMap", "deleteMap"],
+        "ui": [
+          "Per-phase edit controls in map detail view",
+          "Archive toggle and filter in map list",
+          "Delete confirmation dialog"
+        ]
+      }
+    },
+    {
+      "id": "P1-G6",
+      "priority": "P1",
+      "title": "No scalability instrumentation",
+      "status": "UNRESOLVED",
+      "verified_evidence": {
+        "tables_checked": "Grepped all 9 migration .sql files — daily_metric_snapshots, openai_usage_log, rag_chunk_counts not present anywhere",
+        "callOpenAI": "OpenAI API response object is consumed for tool_calls only; usage.prompt_tokens and usage.completion_tokens are never read or logged",
+        "token_count_note": "rag_chunks.token_count column exists in schema and IS populated (character-length approximation: Math.ceil(s.length/4)); this is NOT actual OpenAI token accounting"
+      },
+      "what_is_missing": {
+        "migrations": [
+          "daily_metric_snapshots table",
+          "openai_usage_log table",
+          "rag_chunk_counts view",
+          "Compound indexes for query performance"
+        ],
+        "code": [
+          "src/lib/architect.functions.ts :: callOpenAI — read and log data.usage.prompt_tokens + completion_tokens",
+          "Snapshot upsert on session_event append",
+          "RAG chunk cap and deduplication"
+        ]
+      }
+    },
+    {
+      "id": "P2-G9",
+      "priority": "P2",
+      "title": "context_switch_count / re_ramp_minutes zero-filled from active sessions",
+      "status": "UNRESOLVED",
+      "verified_evidence": {
+        "active_sessions_schema": "active_sessions table (migrations/20260526212501 and 20260527041811) has no context_switch_count or re_ramp_minutes columns — confirmed by direct inspection",
+        "complete_phase_session_rpc": "Both migration versions (20260526222326 and 20260527090000) hardcode 'context_switch_count, re_ramp_minutes = 0, 0' in the INSERT into session_events",
+        "completePhaseSession_server_fn": "src/lib/session-tracker.functions.ts — accepts only session_id and notes; no parameters for either metric",
+        "ActiveSessionPanel": "src/components/ActiveSessionPanel.tsx — no increment buttons, no local state, no mutation calls for context_switch_count or re_ramp_minutes; explicit TODO comment in session-tracker.functions.ts: 'context_switch_count / re_ramp_minutes are captured only via LogModal manual entry; complete_phase_session zero-fills both'"
+      },
+      "what_is_missing": {
+        "migration": "ALTER TABLE active_sessions ADD COLUMN context_switch_count int NOT NULL DEFAULT 0; ALTER TABLE active_sessions ADD COLUMN re_ramp_minutes numeric NOT NULL DEFAULT 0",
+        "rpc": "Update complete_phase_session to read and propagate context_switch_count and re_ramp_minutes from active_sessions row into session_events INSERT",
+        "server_fn": "Update completePhaseSession input schema to optionally accept both values (or rely purely on the RPC reading from active_sessions columns)",
+        "ui": "Add increment buttons for both metrics in ActiveSessionPanel.tsx"
+      }
+    },
+    {
+      "id": "P2-G10",
+      "priority": "P2",
+      "title": "RAG quality gate",
+      "status": "PARTIALLY_RESOLVED",
+      "verified_evidence": {
+        "min_similarity": "src/lib/architect.functions.ts line 223 — match_user_chunks called with min_similarity: 0.35 (confirmed)",
+        "token_count_createMap": "Lines 339+343 — tokenCounts populated and inserted into rag_chunks (confirmed)",
+        "token_count_claimGuestMap": "Lines 570+574 — tokenCounts also populated and inserted in claimGuestMap (confirmed)"
+      },
+      "gap_json_correction": {
+        "field": "P2-G10 in both source JSONs states 'claimGuestMap still needs token_count population'",
+        "finding": "INCORRECT — claimGuestMap already populates token_count at lines 570-574 of src/lib/architect.functions.ts. This item is done."
+      },
+      "what_is_missing": [
+        "No TTL/staleness cron for rag_chunks anywhere in migrations (existing cron 'active_sessions_ttl_cleanup' covers active_sessions only, not rag_chunks)"
+      ]
+    }
+  ],
+  "implementation_order": ["P0-G2", "P0-G3", "P1-G5", "P1-G6", "P2-G9", "P2-G10"],
+  "do_not": [
+    "Modify complete_phase_session beyond G9 patch",
+    "Alter session_events schema",
+    "Implement realtime/WebSockets"
+  ]
+}
