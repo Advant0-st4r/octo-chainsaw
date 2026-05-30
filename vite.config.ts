@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -15,11 +16,11 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "#tanstack-router-entry": "/.tanstack/router/entry.js",
-      "#tanstack-start-entry": "/.tanstack/start/entry.js",
-      "#tanstack-start-plugin-adapters": "/.tanstack/start/plugin-adapters.js",
-      "tanstack-start-manifest:v": "/.tanstack/start/manifest.js",
-      "tanstack-start-injected-head-scripts:v": "/.tanstack/start/injected-head-scripts.js",
+      "#tanstack-router-entry": resolve(".tanstack/router/entry.js"),
+      "#tanstack-start-entry": resolve(".tanstack/start/entry.js"),
+      "#tanstack-start-plugin-adapters": resolve(".tanstack/start/plugin-adapters.js"),
+      "tanstack-start-manifest:v": resolve(".tanstack/start/manifest.js"),
+      "tanstack-start-injected-head-scripts:v": resolve(".tanstack/start/injected-head-scripts.js"),
     },
   },
 });
